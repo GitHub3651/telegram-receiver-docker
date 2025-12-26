@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram 接码平台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header h1 { font-size: 32px; margin-bottom: 10px; }
+        .card { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .card h2 { font-size: 20px; margin-bottom: 15px; color: #333; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: 600; color: #666; }
+        .code { font-family: 'Courier New', monospace; font-size: 18px; font-weight: bold; color: #667eea; }
+        .time { color: #999; font-size: 14px; }
+        .status { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .status.active { background: #d4edda; color: #155724; }
+        .loading { text-align: center; padding: 40px; color: #999; }
+        .empty { text-align: center; padding: 40px; color: #999; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 Telegram 接码平台</h1>
+            <p>自动接收 Telegram 验证码</p>
+        </div>
+        
+        <div class="card">
+            <h2>📊 账号列表</h2>
+            <div id="accounts-list">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>🔢 最新验证码</h2>
+            <div id="codes-list">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 加载账号列表
+        async function loadAccounts() {
+            try {
+                const res = await fetch('/api/accounts');
+                const accounts = await res.json();
+                
+                if (accounts.length === 0) {
+                    document.getElementById('accounts-list').innerHTML = '<div class="empty">暂无账号</div>';
+                    return;
+                }
+                
+                const html = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>手机号</th>
+                                <th>状态</th>
+                                <th>添加时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${accounts.map(acc => `
+                                <tr>
+                                    <td>${acc.phone}</td>
+                                    <td><span class="status active">活跃</span></td>
+                                    <td class="time">${new Date(acc.created_at).toLocaleString('zh-CN')}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                document.getElementById('accounts-list').innerHTML = html;
+            } catch (e) {
+                document.getElementById('accounts-list').innerHTML = '<div class="empty">加载失败</div>';
+            }
+        }
+        
+        // 加载验证码列表
+        async function loadCodes() {
+            try {
+                const res = await fetch('/api/codes?hours=24&limit=50');
+                const codes = await res.json();
+                
+                if (codes.length === 0) {
+                    document.getElementById('codes-list').innerHTML = '<div class="empty">暂无验证码</div>';
+                    return;
+                }
+                
+                const html = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>手机号</th>
+                                <th>验证码</th>
+                                <th>消息内容</th>
+                                <th>接收时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${codes.map(code => `
+                                <tr>
+                                    <td>${code.phone}</td>
+                                    <td class="code">${code.code}</td>
+                                    <td>${code.message.substring(0, 50)}...</td>
+                                    <td class="time">${new Date(code.received_at).toLocaleString('zh-CN')}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                document.getElementById('codes-list').innerHTML = html;
+            } catch (e) {
+                document.getElementById('codes-list').innerHTML = '<div class="empty">加载失败</div>';
+            }
+        }
+        
+        // 初始加载
+        loadAccounts();
+        loadCodes();
+        
+        // 每30秒自动刷新
+        setInterval(() => {
+            loadAccounts();
+            loadCodes();
+        }, 30000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+# 环境变量
+.env
+
+# Session 文件（敏感）
+sessions/*.session
+sessions/*.session-journal
+!sessions/.gitkeep
+
+# 日志文件
+logs/*
+!logs/.gitkeep
+
+# 数据库数据
+postgres_data/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+
+# Node
+node_modules/
+# dist/  # 注释掉，因为 frontend/dist 是我们的静态文件，需要上传
+.vite/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 备份
+backups/*
+!backups/.gitkeep
+*.sql
+*.tar.gz
+
+# SSL 证书
+nginx/ssl/*.pem
+nginx/ssl/*.key
+
+# 临时文件
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
