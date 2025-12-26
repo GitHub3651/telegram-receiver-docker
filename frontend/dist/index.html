@@ -11,7 +11,14 @@
         .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .header h1 { font-size: 32px; margin-bottom: 10px; }
         .card { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .card h2 { font-size: 20px; margin-bottom: 15px; color: #333; }
+        .card h2 { font-size: 20px; margin-bottom: 15px; color: #333; display: flex; justify-content: space-between; align-items: center; }
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; transition: all 0.3s; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5568d3; }
+        .btn-danger { background: #e53e3e; color: white; }
+        .btn-danger:hover { background: #c53030; }
+        .btn-success { background: #38a169; color: white; }
+        .btn-success:hover { background: #2f855a; }
         table { width: 100%; border-collapse: collapse; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
         th { background: #f8f9fa; font-weight: 600; color: #666; }
@@ -21,61 +28,399 @@
         .status.active { background: #d4edda; color: #155724; }
         .loading { text-align: center; padding: 40px; color: #999; }
         .empty { text-align: center; padding: 40px; color: #999; }
+        
+        /* 模态框样式 */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal.active { display: flex; justify-content: center; align-items: center; }
+        .modal-content { background: white; border-radius: 10px; padding: 30px; max-width: 500px; width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .modal-header { font-size: 24px; margin-bottom: 20px; color: #333; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; color: #666; font-size: 14px; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+        .form-group input:focus { outline: none; border-color: #667eea; }
+        .form-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .form-actions button { flex: 1; }
+        .alert { padding: 12px; border-radius: 5px; margin-bottom: 15px; }
+        .alert-error { background: #fed7d7; color: #c53030; }
+        .alert-success { background: #c6f6d5; color: #2f855a; }
+        .alert-info { background: #bee3f8; color: #2c5282; }
+        
+        /* Toast 样式 */
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; }
+        .toast { background: white; padding: 15px 25px; border-radius: 5px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-bottom: 10px; display: flex; align-items: center; animation: slideIn 0.3s ease-out; min-width: 300px; }
+        .toast.info { border-left: 4px solid #3182ce; }
+        .toast.success { border-left: 4px solid #38a169; }
+        .toast.error { border-left: 4px solid #e53e3e; }
+        .toast.warning { border-left: 4px solid #dd6b20; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+        /* 移动端适配 */
+        .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        @media (max-width: 768px) {
+            .container { padding: 10px; }
+            .header { padding: 20px; }
+            .header h1 { font-size: 24px; }
+            .card { padding: 15px; }
+            th, td { padding: 8px; font-size: 14px; white-space: nowrap; }
+            .btn { padding: 6px 12px; font-size: 12px; }
+            /* 允许消息内容换行，避免表格过宽 */
+            td:nth-child(3) { white-space: normal; min-width: 150px; }
+        }
     </style>
 </head>
 <body>
+    <div id="toast-container" class="toast-container"></div>
     <div class="container">
         <div class="header">
             <h1>📱 Telegram 接码平台</h1>
-            <p>自动接收 Telegram 验证码</p>
+            <p>自动接收 Telegram 验证码 - 在线登录管理</p>
         </div>
         
         <div class="card">
-            <h2>📊 账号列表</h2>
+            <h2>
+                📊 账号列表
+                <button class="btn btn-primary" onclick="openAddAccountModal()">+ 添加账号</button>
+            </h2>
             <div id="accounts-list">
                 <div class="loading">加载中...</div>
             </div>
         </div>
         
         <div class="card">
-            <h2>🔢 最新验证码</h2>
+            <h2>
+                🔢 最新验证码
+                <button class="btn btn-danger" onclick="clearCodes()" style="font-size: 14px; padding: 5px 15px;">🗑️ 清空</button>
+            </h2>
             <div id="codes-list">
                 <div class="loading">加载中...</div>
             </div>
         </div>
     </div>
     
+    <!-- 添加账号模态框 -->
+    <div id="addAccountModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">添加 Telegram 账号</div>
+            <div id="modal-alert"></div>
+            
+            <div id="step1">
+                <div class="form-group">
+                    <label>手机号</label>
+                    <div style="display: flex; gap: 10px;">
+                        <select id="country-select" style="width: 140px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background: white; outline: none;"></select>
+                        <input type="text" id="phone-input" placeholder="13800138000" style="flex: 1;" />
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button id="btn-send-code" class="btn btn-primary" onclick="sendCode()">发送验证码</button>
+                    <button class="btn" onclick="closeModal()">取消</button>
+                </div>
+            </div>
+            
+            <div id="step2" style="display:none;">
+                <div class="form-group">
+                    <label>验证码</label>
+                    <input type="text" id="code" placeholder="12345" />
+                </div>
+                <div class="form-group">
+                    <label>两步验证密码（如果有）</label>
+                    <input type="password" id="password" placeholder="留空如果没有设置" />
+                </div>
+                <div class="form-actions">
+                    <button id="btn-verify-code" class="btn btn-success" onclick="verifyCode()">确认登录</button>
+                    <button class="btn" onclick="closeModal()">取消</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <script>
+        // API 基础 URL
+        const API_BASE = '/api';
+
+        // 国家代码列表 (常用国家)
+        const countryList = [
+            "China (中国)|+86", "USA (美国)|+1", "Hong Kong (香港)|+852", "Taiwan (台湾)|+886", 
+            "Macau (澳门)|+853", "Japan (日本)|+81", "Korea (韩国)|+82", "Russia (俄罗斯)|+7",
+            "UK (英国)|+44", "Germany (德国)|+49", "France (法国)|+33", "Italy (意大利)|+39",
+            "Canada (加拿大)|+1", "Australia (澳洲)|+61", "New Zealand (新西兰)|+64",
+            "Singapore (新加坡)|+65", "Malaysia (马来西亚)|+60", "Thailand (泰国)|+66", 
+            "Vietnam (越南)|+84", "Philippines (菲律宾)|+63", "Indonesia (印尼)|+62", 
+            "India (印度)|+91", "Pakistan (巴基斯坦)|+92", "Turkey (土耳其)|+90",
+            "Brazil (巴西)|+55", "Mexico (墨西哥)|+52", "Argentina (阿根廷)|+54",
+            "Spain (西班牙)|+34", "Netherlands (荷兰)|+31", "Sweden (瑞典)|+46",
+            "Switzerland (瑞士)|+41", "Poland (波兰)|+48", "Ukraine (乌克兰)|+380",
+            "South Africa (南非)|+27", "Egypt (埃及)|+20", "Saudi Arabia (沙特)|+966", 
+            "UAE (阿联酋)|+971", "Israel (以色列)|+972", "Iran (伊朗)|+98",
+            "Belgium (比利时)|+32", "Austria (奥地利)|+43", "Norway (挪威)|+47",
+            "Denmark (丹麦)|+45", "Finland (芬兰)|+358", "Ireland (爱尔兰)|+353", 
+            "Portugal (葡萄牙)|+351", "Greece (希腊)|+30", "Czech (捷克)|+420", 
+            "Hungary (匈牙利)|+36", "Romania (罗马尼亚)|+40", "Other (其他)|"
+        ];
+
+        // 初始化国家选择框
+        function initCountrySelect() {
+            const select = document.getElementById('country-select');
+            if (!select || select.options.length > 0) return;
+            
+            countryList.forEach(item => {
+                const [name, code] = item.split('|');
+                const option = document.createElement('option');
+                option.value = code;
+                option.textContent = code ? `${name} ${code}` : name;
+                if (code === '+86') option.selected = true;
+                select.appendChild(option);
+            });
+        }
+        
+        // 获取完整手机号
+        function getFullPhone() {
+            const country = document.getElementById('country-select').value;
+            const number = document.getElementById('phone-input').value.trim();
+            if (!country && !number.startsWith('+')) return ''; // 如果选了"其他"且没填+号，可能有问题，但这里简单处理
+            return (country + ' ' + number).trim();
+        }
+        
+        // 时间格式化工具
+        const formatTime = (str) => {
+            if (!str) return '';
+            const dateStr = str.endsWith('Z') ? str : str + 'Z';
+            return new Date(dateStr).toLocaleString('zh-CN', { hour12: false });
+        };
+
+        // 显示提示
+        function showAlert(message, type = 'info') {
+            const alertDiv = document.getElementById('modal-alert');
+            alertDiv.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => { alertDiv.innerHTML = ''; }, 5000);
+        }
+        
+        // 打开添加账号模态框
+        function openAddAccountModal() {
+            initCountrySelect();
+            document.getElementById('addAccountModal').classList.add('active');
+            document.getElementById('step1').style.display = 'block';
+            document.getElementById('step2').style.display = 'none';
+            document.getElementById('phone-input').value = '';
+            document.getElementById('country-select').value = '+86';
+            document.getElementById('code').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('modal-alert').innerHTML = '';
+        }
+        
+        // 关闭模态框
+        function closeModal() {
+            document.getElementById('addAccountModal').classList.remove('active');
+        }
+        
+        // 发送验证码
+        async function sendCode() {
+            const phone = getFullPhone();
+            if (!phone || phone.length < 5) {
+                showAlert('请输入有效的手机号', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('btn-send-code');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = '正在发送验证码...';
+            btn.style.opacity = '0.7';
+            
+            try {
+                const res = await fetch(`${API_BASE}/accounts/send-code`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    showAlert('验证码已发送，请查看 Telegram', 'success');
+                    document.getElementById('step1').style.display = 'none';
+                    document.getElementById('step2').style.display = 'block';
+                } else {
+                    const errorMsg = typeof data.detail === 'string' ? data.detail : 
+                                    (data.detail?.message || data.message || '发送失败');
+                    showAlert(errorMsg, 'error');
+                }
+            } catch (e) {
+                showAlert('网络错误: ' + (e.message || '未知错误'), 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+                btn.style.opacity = '1';
+            }
+        }
+        
+        // 验证登录
+        async function verifyCode() {
+            const phone = getFullPhone();
+            const code = document.getElementById('code').value.trim();
+            const password = document.getElementById('password').value.trim();
+            
+            if (!code) {
+                showAlert('请输入验证码', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('btn-verify-code');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = '正在登录...';
+            btn.style.opacity = '0.7';
+            
+            try {
+                const res = await fetch(`${API_BASE}/accounts/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, code, password: password || null })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    showAlert('登录成功！', 'success');
+                    setTimeout(() => {
+                        closeModal();
+                        loadAccounts();
+                    }, 1500);
+                } else {
+                    const errorMsg = typeof data.detail === 'string' ? data.detail : 
+                                    (data.detail?.message || data.message || '登录失败');
+                    showAlert(errorMsg, 'error');
+                }
+            } catch (e) {
+                showAlert('网络错误: ' + (e.message || '未知错误'), 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+                btn.style.opacity = '1';
+            }
+        }
+        
+        // 删除账号
+        async function deleteAccount(id, phone) {
+            if (!confirm(`确定要删除账号 ${phone} 吗？`)) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/accounts/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    alert('删除成功');
+                    loadAccounts();
+                } else {
+                    alert('删除失败');
+                }
+            } catch (e) {
+                alert('网络错误');
+            }
+        }
+
+        // 显示 Toast 提示
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerText = message;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'fadeOut 0.3s ease-out forwards';
+                setTimeout(() => { toast.remove(); }, 300);
+            }, 3000);
+        }
+
+        // 手动检查验证码
+        async function checkCode(phone) {
+            const btn = document.getElementById(`btn-check-${phone.replace(/[^0-9]/g, '')}`);
+            const originalText = btn.innerText;
+            btn.innerText = '检查中...';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch(`${API_BASE}/accounts/check/${encodeURIComponent(phone)}`, { method: 'POST' });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    // 检查成功后刷新验证码列表
+                    await loadCodes();
+                    
+                    // 根据后端返回的消息显示不同的提示
+                    if (data.message && data.message.includes('未发现')) {
+                        showToast(data.message, 'warning');
+                        btn.innerText = '无新码';
+                        btn.classList.remove('btn-primary');
+                        btn.classList.add('btn-secondary'); // 假设有这个样式，或者用灰色
+                        btn.style.background = '#718096';
+                    } else {
+                        // 滚动到验证码区域
+                        document.querySelector('.card:nth-child(3)').scrollIntoView({ behavior: 'smooth' });
+                        // 临时显示成功状态
+                        btn.innerText = '已更新';
+                        btn.classList.remove('btn-primary');
+                        btn.classList.add('btn-success');
+                        showToast('检查成功，已更新验证码', 'success');
+                    }
+                    
+                    setTimeout(() => {
+                        btn.innerText = originalText;
+                        btn.disabled = false;
+                        btn.classList.remove('btn-success');
+                        btn.classList.remove('btn-secondary');
+                        btn.style.background = ''; // 清除内联样式
+                        btn.classList.add('btn-primary');
+                    }, 2000);
+                } else {
+                    showToast('检查失败: ' + (data.detail || '未知错误'), 'error');
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                showToast('网络错误', 'error');
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+        
         // 加载账号列表
         async function loadAccounts() {
             try {
-                const res = await fetch('/api/accounts');
+                const res = await fetch(`${API_BASE}/accounts`);
                 const accounts = await res.json();
                 
                 if (accounts.length === 0) {
-                    document.getElementById('accounts-list').innerHTML = '<div class="empty">暂无账号</div>';
+                    document.getElementById('accounts-list').innerHTML = '<div class="empty">暂无账号，请点击"添加账号"开始</div>';
                     return;
                 }
                 
                 const html = `
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>手机号</th>
-                                <th>状态</th>
-                                <th>添加时间</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${accounts.map(acc => `
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
                                 <tr>
-                                    <td>${acc.phone}</td>
-                                    <td><span class="status active">活跃</span></td>
-                                    <td class="time">${new Date(acc.created_at).toLocaleString('zh-CN')}</td>
+                                    <th>手机号</th>
+                                    <th>状态</th>
+                                    <th>添加时间</th>
+                                    <th>操作</th>
                                 </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                ${accounts.map(acc => `
+                                    <tr>
+                                        <td>${acc.phone}</td>
+                                        <td><span class="status active">活跃</span></td>
+                                        <td class="time">${formatTime(acc.created_at)}</td>
+                                        <td>
+                                            <button id="btn-check-${acc.phone.replace(/[^0-9]/g, '')}" class="btn btn-primary" onclick="checkCode('${acc.phone}')" style="padding: 5px 10px; font-size: 12px; margin-right: 5px;">检查验证码</button>
+                                            <button class="btn btn-danger" onclick="deleteAccount(${acc.id}, '${acc.phone}')" style="padding: 5px 10px; font-size: 12px;">删除</button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
                 `;
                 document.getElementById('accounts-list').innerHTML = html;
             } catch (e) {
@@ -83,10 +428,30 @@
             }
         }
         
+        // 清空验证码
+        async function clearCodes() {
+            if (!confirm('确定要清空所有验证码记录吗？此操作不可恢复。')) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/codes`, { method: 'DELETE' });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    showToast('验证码记录已清空', 'success');
+                    loadCodes();
+                } else {
+                    showToast('清空失败: ' + (data.detail || '未知错误'), 'error');
+                }
+            } catch (e) {
+                showToast('网络错误', 'error');
+            }
+        }
+
         // 加载验证码列表
         async function loadCodes() {
             try {
-                const res = await fetch('/api/codes?hours=24&limit=50');
+                // 仅获取最新的一条验证码
+                const res = await fetch(`${API_BASE}/codes?hours=24&limit=1`);
                 const codes = await res.json();
                 
                 if (codes.length === 0) {
@@ -95,26 +460,28 @@
                 }
                 
                 const html = `
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>手机号</th>
-                                <th>验证码</th>
-                                <th>消息内容</th>
-                                <th>接收时间</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${codes.map(code => `
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
                                 <tr>
-                                    <td>${code.phone}</td>
-                                    <td class="code">${code.code}</td>
-                                    <td>${code.message.substring(0, 50)}...</td>
-                                    <td class="time">${new Date(code.received_at).toLocaleString('zh-CN')}</td>
+                                    <th>手机号</th>
+                                    <th>验证码</th>
+                                    <th>消息内容</th>
+                                    <th>接收时间</th>
                                 </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                ${codes.map(code => `
+                                    <tr>
+                                        <td>${code.phone}</td>
+                                        <td class="code">${code.code}</td>
+                                        <td>${code.message}</td>
+                                        <td class="time">${formatTime(code.received_at)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
                 `;
                 document.getElementById('codes-list').innerHTML = html;
             } catch (e) {
@@ -131,6 +498,11 @@
             loadAccounts();
             loadCodes();
         }, 30000);
+        
+        // 点击模态框外部关闭
+        document.getElementById('addAccountModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
     </script>
 </body>
 </html>

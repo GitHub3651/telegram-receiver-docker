@@ -55,13 +55,10 @@ detect_os() {
 # 检查是否为 root 用户
 check_root() {
     if [ "$EUID" -ne 0 ]; then 
-        print_warning "建议使用 root 用户运行此脚本"
-        print_info "或者使用: sudo ./deploy.sh"
-        read -p "是否继续? (y/n) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            exit 1
-        fi
+        print_warning "此脚本需要 root 权限运行"
+        print_info "正在尝试使用 sudo 重新运行..."
+        sudo "$0" "$@"
+        exit $?
     fi
 }
 

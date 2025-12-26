@@ -11,6 +11,7 @@ services:
       POSTGRES_USER: ${DB_USER:-telegram_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+      TZ: Asia/Shanghai
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -42,6 +43,7 @@ services:
       API_HASH: ${API_HASH:-b18441a1ff607e10a989891a5462e627}
       SECRET_KEY: ${SECRET_KEY}
       SCHEDULER_INTERVAL: ${SCHEDULER_INTERVAL:-300}
+      TZ: Asia/Shanghai
     volumes:
       - ./sessions:/app/sessions
       - ./logs:/app/logs
@@ -72,6 +74,8 @@ services:
       dockerfile: Dockerfile
     container_name: telegram_nginx
     restart: always
+    environment:
+      TZ: Asia/Shanghai
     ports:
       - "80:80"
       - "443:443"

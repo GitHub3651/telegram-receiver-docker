@@ -9,8 +9,9 @@
 ### 核心功能
 
 - 📱 **多账号管理** - 支持添加无限个 Telegram 账号
-- 🔄 **自动接码** - 后台定时检查新验证码（可配置间隔）
-- 🌐 **Web 界面** - 简洁直观的实时监控面板
+- 🔄 **自动接码** - 后台定时检查新验证码（智能去重）
+- 🌐 **Web 界面** - 响应式设计，完美适配手机与电脑
+- 🌏 **便捷交互** - 内置国家代码选择，操作状态实时反馈
 - 🔌 **REST API** - 方便集成到其他系统
 - 💾 **数据持久化** - PostgreSQL 存储，数据不丢失
 - 🐳 **Docker 容器化** - 一键部署，环境隔离
@@ -68,30 +69,9 @@ telegram-receiver-docker/
 - **网络**: 能直接访问 Telegram API（香港/日本服务器最佳，无需代理）
 - **端口**: 开放 80 端口（或其他自定义端口）
 
-#### 2. 本地准备 Session 文件
+#### 2. 准备工作
 
-**重要**: 在上传到服务器之前，需要先在本地登录 Telegram 账号并获取 session 文件。
-
-```powershell
-# Windows 本地操作
-cd "C:\Users\user\Desktop\新建文件夹"
-
-# 如果还没有 session 文件，运行登录脚本
-python setup_simple.py
-
-# 登录成功后会生成 telegram_session.session 文件
-```
-
-然后将 session 文件复制到项目目录：
-
-```powershell
-# 创建 sessions 目录
-cd telegram-receiver-docker
-mkdir sessions
-
-# 复制 session 文件
-copy ..\telegram_session.session sessions\
-```
+无需本地准备 Session 文件！系统已支持 Web 界面直接登录。
 
 ### 部署步骤
 
@@ -162,7 +142,7 @@ http://your-server-ip
 
 你会看到：
 - 📊 账号列表
-- 🔢 最新验证码记录（自动刷新）
+- 🔢 最新验证码（仅显示最新一条，完整展示消息内容）
 
 ## 🔧 手动部署
 
@@ -228,76 +208,36 @@ docker-compose exec backend python init_db.py
 
 ## 📱 添加 Telegram 账号
 
-### 方法 1: 使用本地 Session 文件（推荐）
+### 方法: Web 界面直接登录（推荐）
 
-**最简单的方式**：在本地登录后直接上传 session 文件
+系统内置了完整的 Telegram 登录流程，无需手动操作 Session 文件。
 
-```powershell
-# 1. 在本地 Windows 运行登录脚本
-cd "C:\Users\user\Desktop\新建文件夹"
-python setup_simple.py
+1. 访问部署好的网站 `http://your-server-ip`
+2. 点击 **"+ 添加账号"** 按钮
+3. 选择国家/地区（默认 +86），输入手机号，点击"发送验证码"
+   - 按钮会变灰并提示"正在发送..."，请耐心等待
+4. 在手机 Telegram App 上查看验证码
+5. 输入验证码（如果开启了两步验证，还需输入密码）
+6. 点击"确认登录"（按钮会提示"正在登录..."）
 
-# 2. 输入手机号和验证码完成登录
-# 3. 将生成的 telegram_session.session 复制到项目
-cd telegram-receiver-docker
-mkdir sessions
-copy ..\telegram_session.session sessions\account1.session
+系统会自动：
+- ✅ 验证登录信息
+- ✅ 生成并保存 Session 文件
+- ✅ 在数据库中创建账号记录
+- ✅ 立即开始监听验证码
 
-# 4. 如需添加多个账号，重命名为不同文件
-# sessions/account1.session
-# sessions/account2.session
-```
+### 管理账号
 
-然后在数据库中添加账号记录：
-
-```bash
-# SSH 登录服务器后执行
-docker-compose exec postgres psql -U telegram_user -d telegram_codes
-
-# 插入账号记录
-INSERT INTO accounts (phone, session_name, is_active) 
-VALUES ('+8613800138000', 'account1', true);
-```
-
-### 方法 2: 服务器上直接登录
-
-如果服务器在香港/日本等地，可以直接在服务器上登录：
-
-```bash
-# 1. 进入后端容器
-docker-compose exec backend bash
-
-# 2. 运行 Python 交互式登录
-python3 <<EOF
-from telethon import TelegramClient
-import config
-
-phone = input("输入手机号（带国家码，如 +86）: ")
-client = TelegramClient(f'sessions/{phone}', config.API_ID, config.API_HASH)
-
-async def login():
-    await client.connect()
-    if not await client.is_user_authorized():
-        await client.send_code_request(phone)
-        code = input("输入验证码: ")
-        await client.sign_in(phone, code)
-    print("✅ 登录成功！")
-    await client.disconnect()
-
-import asyncio
-asyncio.run(login())
-EOF
-
-# 3. 在数据库中添加记录
-docker-compose exec postgres psql -U telegram_user -d telegram_codes
-INSERT INTO accounts (phone, session_name, is_active) VALUES ('+8613800138000', '+8613800138000', true);
-```
+在 Web 界面首页，你可以：
+- 查看所有已登录账号的状态
+- 删除不再需要的账号（会自动清理 Session 文件）
+- 实时查看接收到的验证码
 
 ### Session 文件说明
 
-- **文件名**: 任意名称，如 `account1.session`, `user1.session`
 - **存放位置**: `sessions/` 目录
-- **数据库关联**: `accounts` 表的 `session_name` 字段要对应文件名（不含 .session 后缀）
+- **文件格式**: SQLite 数据库文件（由 Telethon 生成）
+- **自动管理**: 系统会自动创建和删除，无需人工干预
 - **文件格式**: SQLite 数据库文件（由 Telethon 生成）
 
 ### 查看已添加的账号
@@ -390,7 +330,41 @@ curl http://your-server-ip/api/codes/latest/+8613800138000
   "code": "12345",
   "message": "Your verification code is 12345",
   "received_at": "2025-12-26T10:25:30.000Z"
+}添加账号 - 发送验证码
+
+```bash
+POST /api/accounts/send-code
+```
+
+**请求体**:
+```json
+{
+  "phone": "+8613800138000"
 }
+```
+
+### 添加账号 - 验证登录
+
+```bash
+POST /api/accounts/verify
+```
+
+**请求体**:
+```json
+{
+  "phone": "+8613800138000",
+  "code": "12345",
+  "password": "optional-2fa-password"
+}
+```
+
+### 删除账号
+
+```bash
+DELETE /api/accounts/{id}
+```
+
+### 
 ```
 
 ### 使用示例
@@ -465,6 +439,9 @@ SECRET_KEY=your-secret-key-here
 
 # 定时任务间隔（秒）- 检查新验证码的频率
 SCHEDULER_INTERVAL=300
+
+# 时区设置
+TZ=Asia/Shanghai
 ```
 
 ### 自定义配置
@@ -1132,11 +1109,7 @@ except Exception as e:
 
 ### Q3: 支持哪些国家的号码？
 
-**A**: 所有 Telegram 支持的国家都可以，包括：
-- 🇨🇳 中国 (+86)
-- 🇺🇸 美国 (+1)
-- 🇬🇧 英国 (+44)
-- 等等...
+**A**: 所有 Telegram 支持的国家都可以。Web 界面已内置全球常用国家代码选择（如中国、美国、香港等），也支持手动输入其他国家代码。
 
 ### Q4: 会被封号吗？
 
@@ -1191,6 +1164,10 @@ cd telegram-receiver-docker
 docker-compose up -d
 ```
 访问 http://localhost
+
+### Q11: 为什么只显示一条验证码？
+
+**A**: 为了在手机端保持界面简洁，默认只显示最新的一条验证码。后端 API 依然保留了所有历史记录，可以通过 API 参数 `limit` 获取更多。
 
 ## 🤝 贡献
 
