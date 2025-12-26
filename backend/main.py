@@ -1,17 +1,19 @@
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 from typing import Optional
 import database
-from database import get_db, Account, VerificationCode
+from database import get_db, Account, VerificationCode, User
 import scheduler
 import receiver
 import logging
 import sys
+import auth
+from auth import get_current_user
 
 # 配置日志
 logging.basicConfig(
@@ -57,6 +59,110 @@ class VerifyCodeRequest(BaseModel):
     code: str
     password: Optional[str] = None
 
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class PasswordChangeRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+# --- 认证 API ---
+
+@app.post("/api/auth/register")
+async def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    # 统一转换为小写
+    email = req.email.lower()
+
+    # 1. 校验邮箱格式
+    if not auth.validate_email(email):
+        raise HTTPException(status_code=400, detail="邮箱格式不正确")
+    
+    # 2. 检查邮箱是否已存在
+    existing_user = db.query(User).filter(User.email == email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="该邮箱已被注册")
+    
+    # 3. 创建用户
+    hashed_password = auth.get_password_hash(req.password)
+    new_user = User(email=email, password_hash=hashed_password)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return {"message": "注册成功", "user_id": new_user.id}
+
+@app.post("/api/auth/login")
+async def login(req: LoginRequest, db: Session = Depends(get_db)):
+    # 统一转换为小写
+    email = req.email.lower()
+
+    # 1. 查询用户
+    user = db.query(User).filter(User.email == email).first()
+    
+    # 2. 检查用户是否存在
+    if not user:
+        raise HTTPException(status_code=400, detail="该邮箱未注册")
+        
+    # 3. 检查密码
+    if not auth.verify_password(req.password, user.password_hash):
+        raise HTTPException(status_code=400, detail="密码错误")
+    
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="账号已被封禁")
+    
+    # 4. 生成 Token
+    access_token = auth.create_access_token(data={"sub": user.email, "user_id": user.id})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/api/auth/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "created_at": current_user.created_at,
+        "is_active": current_user.is_active
+    }
+
+@app.put("/api/auth/me/password")
+async def change_password(
+    req: PasswordChangeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not auth.verify_password(req.old_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="旧密码错误")
+    
+    current_user.password_hash = auth.get_password_hash(req.new_password)
+    db.commit()
+    return {"message": "密码修改成功"}
+
+@app.delete("/api/auth/me")
+async def delete_my_account(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # 删除用户的所有 Session 文件
+    import os
+    import glob
+    
+    # 查找该用户的所有 session 文件
+    session_files = glob.glob(f"sessions/user_{current_user.id}_*.session")
+    for f in session_files:
+        try:
+            os.remove(f)
+        except Exception as e:
+            logger.error(f"删除 Session 文件失败: {f}, {e}")
+            
+    # 删除数据库记录 (级联删除 accounts 和 codes)
+    db.delete(current_user)
+    db.commit()
+    return {"message": "账号已注销"}
+
 @app.on_event("startup")
 async def startup_event():
     """启动时初始化数据库和调度器"""
@@ -66,12 +172,15 @@ async def startup_event():
 @app.get("/api/health")
 async def health_check():
     """健康检查"""
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 @app.get("/api/accounts")
-async def get_accounts(db: Session = Depends(get_db)):
-    """获取所有账号"""
-    accounts = db.query(Account).all()
+async def get_accounts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """获取当前用户的所有账号"""
+    accounts = db.query(Account).filter(Account.user_id == current_user.id).all()
     return [{
         "id": acc.id,
         "phone": acc.phone,
@@ -80,11 +189,18 @@ async def get_accounts(db: Session = Depends(get_db)):
     } for acc in accounts]
 
 @app.post("/api/accounts/send-code")
-async def send_code(request: SendCodeRequest, db: Session = Depends(get_db)):
+async def send_code(
+    request: SendCodeRequest, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """发送 Telegram 验证码"""
     try:
         # 检查账号是否已存在
-        existing = db.query(Account).filter(Account.phone == request.phone).first()
+        existing = db.query(Account).filter(
+            Account.phone == request.phone,
+            Account.user_id == current_user.id
+        ).first()
         if existing:
             raise HTTPException(status_code=400, detail="该手机号已添加")
         
@@ -95,21 +211,31 @@ async def send_code(request: SendCodeRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/accounts/verify")
-async def verify_and_login(request: VerifyCodeRequest, db: Session = Depends(get_db)):
+async def verify_and_login(
+    request: VerifyCodeRequest, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """验证码登录并保存账号"""
     try:
+        # 生成唯一的 session 名: user_{user_id}_{phone}
+        clean_phone = request.phone.replace('+', '').replace(' ', '')
+        target_session_name = f"user_{current_user.id}_{clean_phone}"
+
         # 执行登录
         session_name = await receiver.verify_and_create_session(
             request.phone, 
             request.code, 
-            request.password
+            request.password,
+            target_session_name=target_session_name
         )
         
         # 保存到数据库
         new_account = Account(
             phone=request.phone,
             session_name=session_name,
-            is_active=True
+            is_active=True,
+            user_id=current_user.id
         )
         db.add(new_account)
         db.commit()
@@ -128,9 +254,16 @@ async def verify_and_login(request: VerifyCodeRequest, db: Session = Depends(get
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/accounts/{account_id}")
-async def delete_account(account_id: int, db: Session = Depends(get_db)):
+async def delete_account(
+    account_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """删除账号"""
-    account = db.query(Account).filter(Account.id == account_id).first()
+    account = db.query(Account).filter(
+        Account.id == account_id,
+        Account.user_id == current_user.id
+    ).first()
     if not account:
         raise HTTPException(status_code=404, detail="账号不存在")
     
@@ -144,14 +277,25 @@ async def delete_account(account_id: int, db: Session = Depends(get_db)):
     return {"status": "ok", "message": "账号已删除"}
 
 @app.post("/api/accounts/check/{phone}")
-async def check_account_codes(phone: str, db: Session = Depends(get_db)):
+async def check_account_codes(
+    phone: str, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """手动触发检查指定账号的验证码"""
-    account = db.query(Account).filter(Account.phone == phone).first()
+    account = db.query(Account).filter(
+        Account.phone == phone,
+        Account.user_id == current_user.id
+    ).first()
     if not account:
         raise HTTPException(status_code=404, detail="账号不存在")
     
     try:
-        count = await receiver.check_codes_for_account(account.phone, account.session_name)
+        count = await receiver.check_codes_for_account(
+            account.phone, 
+            account.session_name,
+            account_id=account.id
+        )
         
         if count == -1:
             raise HTTPException(status_code=401, detail="Session 已失效，请重新登录")
@@ -170,12 +314,18 @@ async def check_account_codes(phone: str, db: Session = Depends(get_db)):
 async def get_codes(
     hours: int = 24,
     limit: int = 100,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """获取验证码列表"""
-    time_threshold = datetime.utcnow() - timedelta(hours=hours)
-    codes = db.query(VerificationCode).filter(
-        VerificationCode.received_at >= time_threshold
+    time_threshold = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
+    
+    # 仅获取当前用户的验证码
+    codes = db.query(VerificationCode).join(
+        Account, VerificationCode.account_id == Account.id
+    ).filter(
+        VerificationCode.received_at >= time_threshold,
+        Account.user_id == current_user.id
     ).order_by(VerificationCode.received_at.desc()).limit(limit).all()
     
     return [{
@@ -188,10 +338,24 @@ async def get_codes(
     } for code in codes]
 
 @app.get("/api/codes/latest/{phone}")
-async def get_latest_code(phone: str, db: Session = Depends(get_db)):
+async def get_latest_code(
+    phone: str, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """获取指定手机号的最新验证码"""
+    # 检查该手机号是否属于当前用户
+    account = db.query(Account).filter(
+        Account.phone == phone,
+        Account.user_id == current_user.id
+    ).first()
+    
+    if not account:
+        raise HTTPException(status_code=404, detail="账号不存在或不属于您")
+
     code = db.query(VerificationCode).filter(
-        VerificationCode.phone == phone
+        VerificationCode.phone == phone,
+        VerificationCode.account_id == account.id
     ).order_by(VerificationCode.received_at.desc()).first()
     
     if not code:

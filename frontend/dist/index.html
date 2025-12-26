@@ -55,15 +55,41 @@
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
 
+        /* 头部头像样式 */
+        .header-avatar {
+            width: 40px;
+            height: 40px;
+            background: white;
+            color: #667eea;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            text-decoration: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: all 0.3s;
+        }
+        .header-avatar:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
         /* 移动端适配 */
         .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         @media (max-width: 768px) {
             .container { padding: 10px; }
             .header { padding: 20px; }
-            .header h1 { font-size: 24px; }
+            .header h1 { font-size: 20px; margin-bottom: 5px; }
+            .header p { font-size: 12px; opacity: 0.9; }
+            /* 保持横向布局，确保按钮在右侧 */
+            .header-content { display: flex; justify-content: space-between; align-items: center; }
+            .header-actions { margin-left: 10px; }
             .card { padding: 15px; }
-            th, td { padding: 8px; font-size: 14px; white-space: nowrap; }
-            .btn { padding: 6px 12px; font-size: 12px; }
+            .card h2 { font-size: 18px; }
+            th, td { padding: 8px; font-size: 13px; white-space: nowrap; }
+            .btn { padding: 6px 12px; font-size: 13px; }
             /* 允许消息内容换行，避免表格过宽 */
             td:nth-child(3) { white-space: normal; min-width: 150px; }
         }
@@ -73,8 +99,17 @@
     <div id="toast-container" class="toast-container"></div>
     <div class="container">
         <div class="header">
-            <h1>📱 Telegram 接码平台</h1>
-            <p>自动接收 Telegram 验证码 - 在线登录管理</p>
+            <div class="header-content" style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>📱 Telegram 接码平台</h1>
+                    <p>自动接收 Telegram 验证码 - 在线登录管理</p>
+                </div>
+                <div class="header-actions">
+                    <a href="/profile.html" class="header-avatar" id="header-avatar" title="个人中心">
+                        👤
+                    </a>
+                </div>
+            </div>
         </div>
         
         <div class="card">
@@ -136,8 +171,34 @@
     </div>
     
     <script>
+        // 检查登录状态
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login.html';
+        }
+
         // API 基础 URL
         const API_BASE = '/api';
+        
+        // 封装 fetch 请求，自动添加 Token
+        const originalFetch = window.fetch;
+        window.fetch = async (url, options = {}) => {
+            options.headers = options.headers || {};
+            if (token) {
+                options.headers['Authorization'] = `Bearer ${token}`;
+            }
+            
+            const response = await originalFetch(url, options);
+            if (response.status === 401) {
+                logout();
+            }
+            return response;
+        };
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login.html';
+        }
 
         // 国家代码列表 (常用国家)
         const countryList = [
@@ -186,7 +247,7 @@
         const formatTime = (str) => {
             if (!str) return '';
             const dateStr = str.endsWith('Z') ? str : str + 'Z';
-            return new Date(dateStr).toLocaleString('zh-CN', { hour12: false });
+            return new Date(dateStr).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
         };
 
         // 显示提示
@@ -489,7 +550,22 @@
             }
         }
         
+        // 加载用户信息（用于头像）
+        async function loadUserInfo() {
+            try {
+                const res = await fetch(`${API_BASE}/auth/me`);
+                if (res.ok) {
+                    const user = await res.json();
+                    const letter = user.email.charAt(0).toUpperCase();
+                    document.getElementById('header-avatar').textContent = letter;
+                }
+            } catch (e) {
+                console.error('Failed to load user info', e);
+            }
+        }
+
         // 初始加载
+        loadUserInfo();
         loadAccounts();
         loadCodes();
         

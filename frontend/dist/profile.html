@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人中心 - Telegram 接码平台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f7fa; color: #333; }
+        
+        /* 导航栏 */
+        .navbar { background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05); padding: 0 20px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+        .navbar-brand { font-size: 18px; font-weight: 600; color: #333; text-decoration: none; display: flex; align-items: center; gap: 10px; }
+        .navbar-menu { display: flex; gap: 20px; }
+        .nav-link { color: #666; text-decoration: none; font-size: 14px; transition: color 0.2s; cursor: pointer; }
+        .nav-link:hover { color: #667eea; }
+        .nav-link.active { color: #667eea; font-weight: 500; }
+
+        /* 主布局 */
+        .container { max-width: 1000px; margin: 30px auto; padding: 0 20px; display: grid; grid-template-columns: 250px 1fr; gap: 30px; }
+        
+        /* 侧边栏 */
+        .sidebar { background: white; border-radius: 8px; padding: 20px; height: fit-content; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .user-brief { text-align: center; padding-bottom: 20px; border-bottom: 1px solid #eee; margin-bottom: 20px; }
+        .avatar { width: 80px; height: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; color: white; font-size: 32px; font-weight: bold; }
+        .user-email { font-weight: 600; font-size: 16px; word-break: break-all; }
+        .user-role { color: #999; font-size: 12px; margin-top: 5px; }
+        
+        .menu-list { list-style: none; }
+        .menu-item { padding: 12px 15px; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 10px; color: #555; margin-bottom: 5px; }
+        .menu-item:hover { background: #f5f7fa; color: #667eea; }
+        .menu-item.active { background: #eef2ff; color: #667eea; font-weight: 500; }
+        
+        /* 内容区 */
+        .content-area { display: flex; flex-direction: column; gap: 20px; }
+        .card { background: white; border-radius: 8px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .card-header { margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+        .card-title { font-size: 18px; font-weight: 600; color: #333; }
+        
+        /* 表单样式 */
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; color: #555; font-size: 14px; font-weight: 500; }
+        .form-control { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; transition: border-color 0.2s; }
+        .form-control:focus { outline: none; border-color: #667eea; }
+        .form-control[readonly] { background: #f9fafb; color: #888; cursor: not-allowed; }
+        .form-text { font-size: 12px; color: #999; margin-top: 5px; }
+        
+        .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5a6fd6; }
+        .btn-danger { background: #fff5f5; color: #e53e3e; border: 1px solid #fed7d7; }
+        .btn-danger:hover { background: #fed7d7; }
+        .btn-danger-solid { background: #e53e3e; color: white; }
+        .btn-danger-solid:hover { background: #c53030; }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .container { grid-template-columns: 1fr; gap: 20px; }
+            /* 移动端显示侧边栏，但隐藏菜单列表，只保留用户信息 */
+            .sidebar { padding: 20px 15px; }
+            .menu-list { display: none; }
+            .user-brief { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+            
+            .navbar { padding: 0 15px; }
+            .navbar-brand { font-size: 16px; }
+            .navbar-menu { gap: 15px; }
+            .nav-link { font-size: 13px; }
+        }
+        
+        /* Toast */
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; }
+        .toast { background: white; padding: 15px 25px; border-radius: 5px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-bottom: 10px; display: flex; align-items: center; animation: slideIn 0.3s ease-out; }
+        .toast.success { border-left: 4px solid #38a169; }
+        .toast.error { border-left: 4px solid #e53e3e; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div id="toast-container" class="toast-container"></div>
+
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">
+            <span>📱</span> Telegram 接码平台
+        </a>
+        <div class="navbar-menu">
+            <a href="/" class="nav-link">控制台</a>
+            <a href="#" class="nav-link active">个人中心</a>
+            <a href="javascript:logout()" class="nav-link" style="color: #e53e3e;">退出账户</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="user-brief">
+                <div class="avatar" id="avatar-letter">U</div>
+                <div class="user-email" id="sidebar-email">加载中...</div>
+                <div class="user-role">普通用户</div>
+            </div>
+            <ul class="menu-list">
+                <li class="menu-item active" onclick="scrollToSection('profile')">
+                    <span>👤</span> 账号信息
+                </li>
+                <li class="menu-item" onclick="scrollToSection('security')">
+                    <span>🔒</span> 安全设置
+                </li>
+                <li class="menu-item" onclick="scrollToSection('danger')" style="color: #e53e3e;">
+                    <span>⚠️</span> 危险区域
+                </li>
+            </ul>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="content-area">
+            <!-- 基本信息 -->
+            <div class="card" id="section-profile">
+                <div class="card-header">
+                    <h2 class="card-title">账号信息</h2>
+                </div>
+                <div class="form-group">
+                    <label>用户 ID</label>
+                    <input type="text" class="form-control" id="user-id" readonly>
+                </div>
+                <div class="form-group">
+                    <label>注册邮箱</label>
+                    <input type="email" class="form-control" id="user-email" readonly>
+                    <div class="form-text">邮箱是您的唯一登录凭证，暂不支持修改。</div>
+                </div>
+                <div class="form-group">
+                    <label>注册时间</label>
+                    <input type="text" class="form-control" id="user-created-at" readonly>
+                </div>
+            </div>
+
+            <!-- 安全设置 -->
+            <div class="card" id="section-security">
+                <div class="card-header">
+                    <h2 class="card-title">安全设置</h2>
+                </div>
+                <form id="password-form" onsubmit="changePassword(event)">
+                    <div class="form-group">
+                        <label>当前密码</label>
+                        <input type="password" class="form-control" id="old-password" required placeholder="请输入当前使用的密码">
+                    </div>
+                    <div class="form-group">
+                        <label>新密码</label>
+                        <input type="password" class="form-control" id="new-password" required placeholder="设置新密码">
+                    </div>
+                    <div class="form-group">
+                        <label>确认新密码</label>
+                        <input type="password" class="form-control" id="confirm-password" required placeholder="再次输入新密码">
+                    </div>
+                    <button type="submit" class="btn btn-primary">更新密码</button>
+                </form>
+            </div>
+
+            <!-- 危险区域 -->
+            <div class="card" id="section-danger" style="border: 1px solid #fed7d7;">
+                <div class="card-header" style="border-bottom-color: #fed7d7;">
+                    <h2 class="card-title" style="color: #e53e3e;">危险区域</h2>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 5px;">注销账号</h3>
+                        <p style="color: #666; font-size: 14px;">一旦注销，您的所有数据（包括账号、验证码记录）将被永久删除，无法恢复。</p>
+                    </div>
+                    <button class="btn btn-danger-solid" onclick="deleteAccount()">确认注销</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        const token = localStorage.getItem('token');
+
+        if (!token) {
+            window.location.href = '/login.html';
+        }
+
+        // 封装 fetch
+        const authFetch = async (url, options = {}) => {
+            options.headers = options.headers || {};
+            options.headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(url, options);
+            if (res.status === 401) {
+                logout();
+            }
+            return res;
+        };
+
+        // 加载用户信息
+        async function loadUserInfo() {
+            try {
+                const res = await authFetch(`${API_BASE}/auth/me`);
+                if (!res.ok) throw new Error('Failed to load user info');
+                
+                const user = await res.json();
+                
+                // 填充数据
+                document.getElementById('user-id').value = user.id;
+                document.getElementById('user-email').value = user.email;
+                document.getElementById('sidebar-email').textContent = user.email;
+                document.getElementById('avatar-letter').textContent = user.email.charAt(0).toUpperCase();
+                
+                const createdAt = user.created_at.endsWith('Z') ? user.created_at : user.created_at + 'Z';
+                document.getElementById('user-created-at').value = new Date(createdAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+                
+            } catch (e) {
+                showToast('加载用户信息失败', 'error');
+            }
+        }
+
+        // 修改密码
+        async function changePassword(e) {
+            e.preventDefault();
+            const oldPassword = document.getElementById('old-password').value;
+            const newPassword = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+
+            if (newPassword !== confirmPassword) {
+                showToast('两次输入的新密码不一致', 'error');
+                return;
+            }
+
+            try {
+                const res = await authFetch(`${API_BASE}/auth/me/password`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    showToast('密码修改成功，请重新登录', 'success');
+                    setTimeout(logout, 1500);
+                } else {
+                    showToast(data.detail || '修改失败', 'error');
+                }
+            } catch (e) {
+                showToast('网络错误', 'error');
+            }
+        }
+
+        // 注销账号
+        async function deleteAccount() {
+            if (!confirm('⚠️ 严重警告：\n\n您确定要注销当前账号吗？\n此操作将永久删除您的所有数据！\n此操作不可撤销！')) {
+                return;
+            }
+            
+            const doubleCheck = prompt('为了确认您的意图，请输入您的邮箱地址：');
+            const currentEmail = document.getElementById('user-email').value;
+            
+            if (doubleCheck !== currentEmail) {
+                alert('邮箱输入错误，操作已取消');
+                return;
+            }
+
+            try {
+                const res = await authFetch(`${API_BASE}/auth/me`, { method: 'DELETE' });
+                if (res.ok) {
+                    alert('账号已成功注销，感谢您的使用。');
+                    logout();
+                } else {
+                    const data = await res.json();
+                    showToast(data.detail || '注销失败', 'error');
+                }
+            } catch (e) {
+                showToast('网络错误', 'error');
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login.html';
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'fadeOut 0.3s ease-out forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function scrollToSection(id) {
+            document.getElementById(`section-${id}`).scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // 初始化
+        loadUserInfo();
+    </script>
+</body>
+</html>

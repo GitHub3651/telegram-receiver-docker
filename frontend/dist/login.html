@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - Telegram 接码平台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .login-container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { color: #333; font-size: 24px; margin-bottom: 10px; }
+        .header p { color: #666; font-size: 14px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; color: #333; font-size: 14px; font-weight: 500; }
+        .form-group input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; transition: border-color 0.3s; }
+        .form-group input:focus { outline: none; border-color: #667eea; }
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; transition: background 0.3s; }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-primary:hover { opacity: 0.9; }
+        .toggle-form { text-align: center; margin-top: 20px; font-size: 14px; color: #666; }
+        .toggle-form a { color: #667eea; text-decoration: none; cursor: pointer; }
+        .toggle-form a:hover { text-decoration: underline; }
+        .error-msg { color: #e53e3e; font-size: 14px; margin-bottom: 15px; text-align: center; display: none; }
+
+        @media (max-width: 480px) {
+            body { padding: 15px; }
+            .login-container { padding: 30px 20px; }
+            .header h1 { font-size: 22px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="header">
+            <h1>Telegram 接码平台</h1>
+            <p id="page-desc">请登录您的账号</p>
+        </div>
+        
+        <div id="error-msg" class="error-msg"></div>
+
+        <form id="auth-form">
+            <div class="form-group">
+                <label>邮箱</label>
+                <input type="email" id="email" required placeholder="请输入邮箱">
+            </div>
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" id="password" required placeholder="请输入密码">
+            </div>
+            <div class="form-group" id="confirm-password-group" style="display: none;">
+                <label>确认密码</label>
+                <input type="password" id="confirm-password" placeholder="请再次输入密码">
+            </div>
+            <button type="submit" class="btn btn-primary" id="submit-btn">登录</button>
+        </form>
+        
+        <div class="toggle-form">
+            <span id="toggle-text">还没有账号？</span>
+            <a id="toggle-btn">立即注册</a>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        let isLogin = true;
+
+        const form = document.getElementById('auth-form');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const confirmPasswordInput = document.getElementById('confirm-password');
+        const confirmPasswordGroup = document.getElementById('confirm-password-group');
+        const submitBtn = document.getElementById('submit-btn');
+        const toggleBtn = document.getElementById('toggle-btn');
+        const toggleText = document.getElementById('toggle-text');
+        const pageDesc = document.getElementById('page-desc');
+        const errorMsg = document.getElementById('error-msg');
+
+        // 检查是否已登录
+        if (localStorage.getItem('token')) {
+            window.location.href = '/';
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            isLogin = !isLogin;
+            if (isLogin) {
+                document.title = '登录 - Telegram 接码平台';
+                pageDesc.textContent = '请登录您的账号';
+                submitBtn.textContent = '登录';
+                toggleText.textContent = '还没有账号？';
+                toggleBtn.textContent = '立即注册';
+                confirmPasswordGroup.style.display = 'none';
+                confirmPasswordInput.required = false;
+            } else {
+                document.title = '注册 - Telegram 接码平台';
+                pageDesc.textContent = '创建新账号';
+                submitBtn.textContent = '注册';
+                toggleText.textContent = '已有账号？';
+                toggleBtn.textContent = '直接登录';
+                confirmPasswordGroup.style.display = 'block';
+                confirmPasswordInput.required = true;
+            }
+            errorMsg.style.display = 'none';
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            
+            // 注册时校验密码一致性
+            if (!isLogin) {
+                const confirmPassword = confirmPasswordInput.value;
+                if (password !== confirmPassword) {
+                    errorMsg.textContent = '两次输入的密码不一致';
+                    errorMsg.style.display = 'block';
+                    return;
+                }
+            }
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = '处理中...';
+            errorMsg.style.display = 'none';
+
+            try {
+                const endpoint = isLogin ? '/auth/login' : '/auth/register';
+                const res = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                let data;
+                const contentType = res.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    data = await res.json();
+                } else {
+                    // 如果不是 JSON，读取文本（可能是 500 错误页面）
+                    const text = await res.text();
+                    throw new Error(res.statusText + (text ? ": " + text.substring(0, 100) : ""));
+                }
+                
+                if (!res.ok) {
+                    throw new Error(data.detail || '操作失败');
+                }
+
+                if (isLogin) {
+                    localStorage.setItem('token', data.access_token);
+                    window.location.href = '/';
+                } else {
+                    // 注册成功后自动登录
+                    const loginRes = await fetch(`${API_BASE}/auth/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+                    
+                    if (loginRes.ok) {
+                        const loginData = await loginRes.json();
+                        localStorage.setItem('token', loginData.access_token);
+                        window.location.href = '/';
+                    } else {
+                        alert('注册成功，请登录');
+                        // 切换回登录界面
+                        toggleBtn.click();
+                        submitBtn.disabled = false;
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+                errorMsg.textContent = err.message;
+                errorMsg.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.textContent = isLogin ? '登录' : '注册';
+            }
+        });
+    </script>
+</body>
+</html>

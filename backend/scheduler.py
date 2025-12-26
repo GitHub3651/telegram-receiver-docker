@@ -3,9 +3,24 @@ import asyncio
 import config
 import receiver
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from database import SessionLocal, VerificationCode
 
 scheduler = BackgroundScheduler()
+
+def cleanup_old_codes():
+    """清理超过7天的验证码"""
+    db = SessionLocal()
+    try:
+        seven_days_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)
+        deleted_count = db.query(VerificationCode).filter(VerificationCode.received_at < seven_days_ago).delete()
+        db.commit()
+        if deleted_count > 0:
+            print(f"🧹 已清理 {deleted_count} 条过期验证码")
+    except Exception as e:
+        print(f"❌ 清理验证码失败: {e}")
+    finally:
+        db.close()
 
 def schedule_next_job():
     """安排下一次保活任务"""
@@ -36,5 +51,8 @@ def start_scheduler():
     # 启动时先安排第一次任务
     schedule_next_job()
     
+    # 每天执行一次清理任务
+    scheduler.add_job(cleanup_old_codes, 'interval', hours=24, id='cleanup_codes', name='清理过期验证码')
+    
     scheduler.start()
-    print("✅ 调度器已启动，任务模式：随机 4-5 天保活")
+    print("✅ 调度器已启动，任务模式：随机 4-5 天保活 + 每日清理过期验证码")

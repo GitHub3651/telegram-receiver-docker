@@ -31,14 +31,19 @@ async def send_verification_code(phone: str):
             os.remove(f"{session_path}.session")
         raise Exception(f"发送验证码失败: {str(e)}")
 
-async def verify_and_create_session(phone: str, code: str, password: str = None):
+async def verify_and_create_session(phone: str, code: str, password: str = None, target_session_name: str = None):
     """验证登录并创建 session"""
     client = _login_clients.get(phone)
     if not client:
         raise Exception("请先发送验证码")
     
-    session_name = phone.replace('+', '').replace(' ', '')
-    temp_session = f"temp_{session_name}"
+    # 如果指定了目标 session 名，则使用指定的，否则使用默认的 (兼容旧逻辑)
+    if target_session_name:
+        final_session_name = target_session_name
+    else:
+        final_session_name = phone.replace('+', '').replace(' ', '')
+        
+    temp_session = f"temp_{phone.replace('+', '').replace(' ', '')}"
     
     try:
         # 尝试登录
@@ -60,14 +65,14 @@ async def verify_and_create_session(phone: str, code: str, password: str = None)
         
         # 重命名 session 文件
         old_path = os.path.join(config.SESSION_DIR, f"{temp_session}.session")
-        new_path = os.path.join(config.SESSION_DIR, f"{session_name}.session")
+        new_path = os.path.join(config.SESSION_DIR, f"{final_session_name}.session")
         
         if os.path.exists(old_path):
             # 如果目标文件已存在，先删除
             if os.path.exists(new_path):
                 os.remove(new_path)
             os.rename(old_path, new_path)
-            print(f"✅ Session 文件已保存: {session_name}.session")
+            print(f"✅ Session 文件已保存: {final_session_name}.session")
         else:
             raise Exception(f"Session 文件不存在: {old_path}")
         
@@ -75,7 +80,7 @@ async def verify_and_create_session(phone: str, code: str, password: str = None)
         if phone in _login_clients:
             del _login_clients[phone]
         
-        return session_name
+        return final_session_name
         
     except Exception as e:
         # 打印详细错误堆栈
@@ -122,7 +127,7 @@ async def delete_session(session_name: str):
         os.remove(session_path)
         print(f"✅ Session 文件已删除: {session_name}")
 
-async def check_codes_for_account(phone: str, session_name: str):
+async def check_codes_for_account(phone: str, session_name: str, account_id: int = None):
     """检查单个账号的验证码"""
     session_path = os.path.join(config.SESSION_DIR, session_name)
     
@@ -166,7 +171,8 @@ async def check_codes_for_account(phone: str, session_name: str):
                         code=code,
                         message=message.message,
                         received_at=message.date,
-                        service="Telegram"
+                        service="Telegram",
+                        account_id=account_id
                     )
                     db.add(new_code)
                     db.commit()
@@ -234,4 +240,4 @@ async def check_all_accounts():
     print(f"🔍 开始检查 {len(accounts)} 个账号...")
     
     for account in accounts:
-        await check_codes_for_account(account.phone, account.session_name)
+        await check_codes_for_account(account.phone, account.session_name, account_id=account.id)
