@@ -276,18 +276,20 @@ async def delete_account(
     
     return {"status": "ok", "message": "账号已删除"}
 
-@app.post("/api/accounts/check/{phone}")
+@app.post("/api/accounts/check/{account_id}")
 async def check_account_codes(
-    phone: str, 
+    account_id: int, 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """手动触发检查指定账号的验证码"""
+    logger.info(f"Checking account {account_id} for user {current_user.id}")
     account = db.query(Account).filter(
-        Account.phone == phone,
+        Account.id == account_id,
         Account.user_id == current_user.id
     ).first()
     if not account:
+        logger.warning(f"Account {account_id} not found for user {current_user.id}")
         raise HTTPException(status_code=404, detail="账号不存在")
     
     try:
@@ -298,9 +300,16 @@ async def check_account_codes(
         )
         
         if count == -1:
+            # Session 失效，更新数据库状态
+            account.is_active = False
+            db.commit()
             raise HTTPException(status_code=401, detail="Session 已失效，请重新登录")
             
         if count > 0:
+            # 如果成功获取到验证码，确保账号状态为活跃
+            if not account.is_active:
+                account.is_active = True
+                db.commit()
             return {"status": "ok", "message": f"检查完成，发现 {count} 个有效验证码"}
         else:
             # 虽然成功执行了检查，但没有新验证码，返回特定消息供前端判断
@@ -312,6 +321,8 @@ async def check_account_codes(
 
 @app.get("/api/codes")
 async def get_codes(
+    phone: Optional[str] = None,
+    account_id: Optional[int] = None,
     hours: int = 24,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -320,13 +331,19 @@ async def get_codes(
     """获取验证码列表"""
     time_threshold = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
     
-    # 仅获取当前用户的验证码
-    codes = db.query(VerificationCode).join(
+    query = db.query(VerificationCode).join(
         Account, VerificationCode.account_id == Account.id
     ).filter(
         VerificationCode.received_at >= time_threshold,
         Account.user_id == current_user.id
-    ).order_by(VerificationCode.received_at.desc()).limit(limit).all()
+    )
+    
+    if account_id:
+        query = query.filter(Account.id == account_id)
+    elif phone:
+        query = query.filter(Account.phone == phone)
+        
+    codes = query.order_by(VerificationCode.received_at.desc()).limit(limit).all()
     
     return [{
         "id": code.id,
@@ -336,6 +353,35 @@ async def get_codes(
         "service": code.service,
         "received_at": code.received_at.isoformat()
     } for code in codes]
+
+@app.get("/api/codes/latest/account/{account_id}")
+async def get_latest_code_by_id(
+    account_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """获取指定账号ID的最新验证码"""
+    # 检查该账号是否属于当前用户
+    account = db.query(Account).filter(
+        Account.id == account_id,
+        Account.user_id == current_user.id
+    ).first()
+    
+    if not account:
+        raise HTTPException(status_code=404, detail="账号不存在或不属于您")
+
+    code = db.query(VerificationCode).filter(
+        VerificationCode.account_id == account.id
+    ).order_by(VerificationCode.received_at.desc()).first()
+    
+    if not code:
+        raise HTTPException(status_code=404, detail="未找到验证码")
+    
+    return {
+        "code": code.code,
+        "message": code.message,
+        "received_at": code.received_at.isoformat()
+    }
 
 @app.get("/api/codes/latest/{phone}")
 async def get_latest_code(
@@ -368,12 +414,44 @@ async def get_latest_code(
     }
 
 @app.delete("/api/codes")
-async def clear_codes(db: Session = Depends(get_db)):
-    """清空所有验证码记录"""
+async def clear_codes(
+    phone: Optional[str] = None,
+    account_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """清空验证码记录"""
     try:
-        db.query(VerificationCode).delete()
+        query = db.query(VerificationCode).filter(
+            VerificationCode.account_id.in_(
+                db.query(Account.id).filter(Account.user_id == current_user.id)
+            )
+        )
+        
+        if account_id:
+            # 验证该账号是否属于当前用户
+            account = db.query(Account).filter(
+                Account.id == account_id, 
+                Account.user_id == current_user.id
+            ).first()
+            if not account:
+                raise HTTPException(status_code=404, detail="账号不存在")
+            
+            query = query.filter(VerificationCode.account_id == account.id)
+        elif phone:
+            # 验证该手机号是否属于当前用户
+            account = db.query(Account).filter(
+                Account.phone == phone, 
+                Account.user_id == current_user.id
+            ).first()
+            if not account:
+                raise HTTPException(status_code=404, detail="账号不存在")
+            
+            query = query.filter(VerificationCode.account_id == account.id)
+            
+        query.delete(synchronize_session=False)
         db.commit()
-        return {"status": "ok", "message": "所有验证码记录已清空"}
+        return {"status": "ok", "message": "验证码记录已清空"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

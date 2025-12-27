@@ -191,7 +191,7 @@ async def check_codes_for_account(phone: str, session_name: str, account_id: int
         await client.disconnect()
         db.close()
 
-async def keep_alive_account(phone: str, session_name: str):
+async def keep_alive_account(phone: str, session_name: str, account_id: int):
     """仅进行 Session 保活，不检查验证码"""
     client = TelegramClient(
         f"sessions/{session_name}", 
@@ -203,33 +203,51 @@ async def keep_alive_account(phone: str, session_name: str):
         lang_code="en"
     )
     
+    db = SessionLocal()
     try:
         await client.connect()
         
         if not await client.is_user_authorized():
             print(f"⚠️ 保活失败: 账号 {phone} 未授权 (Session 已失效)")
+            # 更新数据库状态
+            account = db.query(Account).filter(Account.id == account_id).first()
+            if account:
+                account.is_active = False
+                db.commit()
+                print(f"❌ 已将账号 {phone} 标记为失效")
             return
         
         # 获取自身信息作为保活操作
         me = await client.get_me()
         print(f"✅ 账号保活成功: {phone} (ID: {me.id})")
         
+        # 确保状态为活跃
+        account = db.query(Account).filter(Account.id == account_id).first()
+        if account and not account.is_active:
+            account.is_active = True
+            db.commit()
+            print(f"✅ 已将账号 {phone} 重新标记为活跃")
+        
     except Exception as e:
         print(f"❌ 账号保活出错 {phone}: {e}")
     
     finally:
         await client.disconnect()
+        db.close()
 
 async def keep_alive_all_accounts():
     """对所有账号进行保活"""
     db = SessionLocal()
+    # 即使是标记为不活跃的账号，也可以尝试检查一次，万一恢复了呢？
+    # 但为了效率，通常只检查活跃的。不过为了能自动发现失效，我们还是只检查活跃的。
+    # 如果用户手动修复了 session，手动点击检查即可恢复状态。
     accounts = db.query(Account).filter(Account.is_active == True).all()
     db.close()
     
     print(f"🔄 开始执行账号保活任务 ({len(accounts)} 个账号)...")
     
     for account in accounts:
-        await keep_alive_account(account.phone, account.session_name)
+        await keep_alive_account(account.phone, account.session_name, account.id)
 
 async def check_all_accounts():
     """检查所有账号的验证码"""

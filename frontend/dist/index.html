@@ -7,27 +7,51 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
         .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .header h1 { font-size: 32px; margin-bottom: 10px; }
-        .card { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .card h2 { font-size: 20px; margin-bottom: 15px; color: #333; display: flex; justify-content: space-between; align-items: center; }
-        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; transition: all 0.3s; }
+        
+        /* 账号卡片样式 */
+        .account-card { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 5px solid #667eea; transition: transform 0.2s; }
+        .account-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .account-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
+        .account-info { display: flex; align-items: center; gap: 15px; }
+        .account-phone { font-size: 20px; font-weight: bold; color: #2d3748; }
+        .account-meta { font-size: 12px; color: #718096; }
+        .meta-separator { margin: 0 10px; color: #cbd5e0; }
+        .meta-date { margin-left: 0; }
+        .account-actions { display: flex; gap: 8px; }
+        
+        /* 消息盒子样式 */
+        .message-box { background: #f7fafc; border-radius: 8px; padding: 0; border: 1px solid #e2e8f0; max-height: 300px; overflow-y: auto; }
+        .message-item { padding: 12px 15px; border-bottom: 1px solid #edf2f7; display: flex; flex-direction: column; gap: 5px; transition: background 0.3s; }
+        .message-item:last-child { border-bottom: none; }
+        .message-item:hover { background: #edf2f7; }
+        .message-item.highlight { animation: highlight-pulse 2s ease-out; }
+        
+        .message-row-top { display: flex; justify-content: space-between; align-items: center; }
+        .message-code { font-family: 'Courier New', monospace; font-size: 18px; font-weight: bold; color: #667eea; background: #ebf4ff; padding: 2px 6px; border-radius: 4px; }
+        .message-time { font-size: 12px; color: #a0aec0; }
+        .message-content { font-size: 14px; color: #4a5568; line-height: 1.5; word-break: break-all; }
+        .empty-message { text-align: center; color: #a0aec0; padding: 30px; font-size: 14px; }
+
+        @keyframes highlight-pulse {
+            0% { background-color: #fff3cd; }
+            100% { background-color: transparent; }
+        }
+
+        .btn { padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; transition: all 0.3s; display: inline-flex; align-items: center; justify-content: center; }
         .btn-primary { background: #667eea; color: white; }
         .btn-primary:hover { background: #5568d3; }
-        .btn-danger { background: #e53e3e; color: white; }
-        .btn-danger:hover { background: #c53030; }
-        .btn-success { background: #38a169; color: white; }
-        .btn-success:hover { background: #2f855a; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
-        th { background: #f8f9fa; font-weight: 600; color: #666; }
-        .code { font-family: 'Courier New', monospace; font-size: 18px; font-weight: bold; color: #667eea; }
-        .time { color: #999; font-size: 14px; }
-        .status { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-        .status.active { background: #d4edda; color: #155724; }
-        .loading { text-align: center; padding: 40px; color: #999; }
-        .empty { text-align: center; padding: 40px; color: #999; }
+        .btn-danger { background: #fc8181; color: white; }
+        .btn-danger:hover { background: #f56565; }
+        .btn-secondary { background: #cbd5e0; color: #4a5568; }
+        .btn-secondary:hover { background: #a0aec0; }
+        .btn-success { background: #48bb78; color: white; }
+        
+        .status { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+        .status.active { background: #c6f6d5; color: #22543d; }
+        .status.error { background: #fed7d7; color: #822727; }
         
         /* 模态框样式 */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
@@ -43,7 +67,6 @@
         .alert { padding: 12px; border-radius: 5px; margin-bottom: 15px; }
         .alert-error { background: #fed7d7; color: #c53030; }
         .alert-success { background: #c6f6d5; color: #2f855a; }
-        .alert-info { background: #bee3f8; color: #2c5282; }
         
         /* Toast 样式 */
         .toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; }
@@ -76,23 +99,40 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
         }
 
-        /* 移动端适配 */
-        .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         @media (max-width: 768px) {
             .container { padding: 10px; }
             .header { padding: 20px; }
-            .header h1 { font-size: 20px; margin-bottom: 5px; }
-            .header p { font-size: 12px; opacity: 0.9; }
-            /* 保持横向布局，确保按钮在右侧 */
-            .header-content { display: flex; justify-content: space-between; align-items: center; }
-            .header-actions { margin-left: 10px; }
-            .card { padding: 15px; }
-            .card h2 { font-size: 18px; }
-            th, td { padding: 8px; font-size: 13px; white-space: nowrap; }
-            .btn { padding: 6px 12px; font-size: 13px; }
-            /* 允许消息内容换行，避免表格过宽 */
-            td:nth-child(3) { white-space: normal; min-width: 150px; }
+            .header h1 { font-size: 20px; }
+            
+            /* 列表头部适配 */
+            .section-header { flex-direction: column; align-items: stretch; gap: 15px; }
+            .section-header h2 { text-align: center; }
+            .section-header button { width: 100%; padding: 12px; font-size: 16px; }
+
+            /* 卡片适配 */
+            .account-card { padding: 15px; }
+            .account-header { flex-direction: column; align-items: flex-start; gap: 15px; }
+            
+            .account-info { width: 100%; flex-direction: column; align-items: flex-start; gap: 5px; }
+            .account-phone { font-size: 18px; }
+            .account-meta { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 5px; }
+            .meta-separator { display: none; }
+            
+            /* 按钮组适配 - 垂直排列 */
+            .account-actions { width: 100%; flex-direction: column; gap: 10px; }
+            .account-actions .btn { width: 100%; padding: 10px; justify-content: center; }
+            
+            /* 消息列表适配 */
+            .message-item { padding: 10px; }
+            .message-code { font-size: 16px; }
+            
+            /* 模态框适配 */
+            .modal-content { padding: 20px; }
         }
+        
+        /* 列表头部样式 (桌面端默认) */
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .section-header h2 { font-size: 24px; color: #2d3748; margin: 0; }
     </style>
 </head>
 <body>
@@ -112,22 +152,12 @@
             </div>
         </div>
         
-        <div class="card">
-            <h2>
-                📊 账号列表
+        <div class="card" style="background: transparent; box-shadow: none; padding: 0;">
+            <div class="section-header">
+                <h2>📊 账号列表</h2>
                 <button class="btn btn-primary" onclick="openAddAccountModal()">+ 添加账号</button>
-            </h2>
-            <div id="accounts-list">
-                <div class="loading">加载中...</div>
             </div>
-        </div>
-        
-        <div class="card">
-            <h2>
-                🔢 最新验证码
-                <button class="btn btn-danger" onclick="clearCodes()" style="font-size: 14px; padding: 5px 15px;">🗑️ 清空</button>
-            </h2>
-            <div id="codes-list">
+            <div id="accounts-container">
                 <div class="loading">加载中...</div>
             </div>
         </div>
@@ -394,31 +424,35 @@
         }
 
         // 手动检查验证码
-        async function checkCode(phone) {
-            const btn = document.getElementById(`btn-check-${phone.replace(/[^0-9]/g, '')}`);
+        async function checkCode(accountId, phone) {
+            const cleanPhone = phone.replace(/[^0-9]/g, '');
+            const btn = document.getElementById(`btn-check-${cleanPhone}`);
             const originalText = btn.innerText;
             btn.innerText = '检查中...';
             btn.disabled = true;
             
             try {
-                const res = await fetch(`${API_BASE}/accounts/check/${encodeURIComponent(phone)}`, { method: 'POST' });
+                // 1. 触发后端接收验证码 (使用 accountId)
+                const res = await fetch(`${API_BASE}/accounts/check/${accountId}`, { method: 'POST' });
                 const data = await res.json();
                 
                 if (res.ok) {
-                    // 检查成功后刷新验证码列表
-                    await loadCodes();
-                    
-                    // 根据后端返回的消息显示不同的提示
+                    // 2. 检查成功后，获取该账号的最新验证码 (使用 accountId 获取)
+                    try {
+                        const codeRes = await fetch(`${API_BASE}/codes/latest/account/${accountId}`);
+                        if (codeRes.ok) {
+                            const latestCode = await codeRes.json();
+                            // 3. 更新该账号的消息盒子 (全量检重)
+                            updateAccountMessageBox(phone, latestCode);
+                        }
+                    } catch (ignore) {}
+
                     if (data.message && data.message.includes('未发现')) {
                         showToast(data.message, 'warning');
                         btn.innerText = '无新码';
                         btn.classList.remove('btn-primary');
-                        btn.classList.add('btn-secondary'); // 假设有这个样式，或者用灰色
-                        btn.style.background = '#718096';
+                        btn.classList.add('btn-secondary'); 
                     } else {
-                        // 滚动到验证码区域
-                        document.querySelector('.card:nth-child(3)').scrollIntoView({ behavior: 'smooth' });
-                        // 临时显示成功状态
                         btn.innerText = '已更新';
                         btn.classList.remove('btn-primary');
                         btn.classList.add('btn-success');
@@ -430,13 +464,15 @@
                         btn.disabled = false;
                         btn.classList.remove('btn-success');
                         btn.classList.remove('btn-secondary');
-                        btn.style.background = ''; // 清除内联样式
                         btn.classList.add('btn-primary');
                     }, 2000);
                 } else {
                     showToast('检查失败: ' + (data.detail || '未知错误'), 'error');
                     btn.innerText = originalText;
                     btn.disabled = false;
+                    if (res.status === 401) {
+                        loadAccounts();
+                    }
                 }
             } catch (e) {
                 showToast('网络错误', 'error');
@@ -444,112 +480,148 @@
                 btn.disabled = false;
             }
         }
+
+        // 更新特定账号的消息盒子 (全量检重)
+        function updateAccountMessageBox(phone, codeData) {
+            const cleanPhone = phone.replace(/[^0-9]/g, '');
+            const box = document.getElementById(`msg-box-${cleanPhone}`);
+            if (!box) return;
+
+            // 移除空状态
+            const emptyMsg = box.querySelector('.empty-message');
+            if (emptyMsg) emptyMsg.remove();
+
+            // 全量检重：遍历所有消息项
+            const items = box.querySelectorAll('.message-item');
+            const newCode = codeData.code;
+            const newTime = formatTime(codeData.received_at);
+            
+            for (const item of items) {
+                const itemCode = item.querySelector('.message-code').innerText;
+                const itemTime = item.querySelector('.message-time').innerText;
+                
+                // 如果验证码和时间都匹配，认为是同一条消息
+                if (itemCode === newCode && itemTime === newTime) {
+                    // 发现重复，高亮并退出
+                    item.classList.remove('highlight'); // 重置动画
+                    void item.offsetWidth; // 触发重绘
+                    item.classList.add('highlight');
+                    return;
+                }
+            }
+
+            // 如果循环结束没发现重复，则插入新消息
+            const newItemHtml = `
+                <div class="message-item highlight">
+                    <div class="message-row-top">
+                        <div class="message-code">${codeData.code}</div>
+                        <div class="message-time">${formatTime(codeData.received_at)}</div>
+                    </div>
+                    <div class="message-content">${codeData.message}</div>
+                </div>
+            `;
+            
+            box.insertAdjacentHTML('afterbegin', newItemHtml);
+            
+            // 移除高亮
+            const newItem = box.querySelector('.message-item');
+            setTimeout(() => newItem.classList.remove('highlight'), 2000);
+        }
         
-        // 加载账号列表
+        // 加载账号列表 (重构为卡片式)
         async function loadAccounts() {
             try {
                 const res = await fetch(`${API_BASE}/accounts`);
                 const accounts = await res.json();
+                const container = document.getElementById('accounts-container');
                 
                 if (accounts.length === 0) {
-                    document.getElementById('accounts-list').innerHTML = '<div class="empty">暂无账号，请点击"添加账号"开始</div>';
+                    container.innerHTML = '<div class="empty" style="background:white; padding:40px; border-radius:10px;">暂无账号，请点击"添加账号"开始</div>';
                     return;
                 }
                 
-                const html = `
-                    <div class="table-responsive">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>手机号</th>
-                                    <th>状态</th>
-                                    <th>添加时间</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${accounts.map(acc => `
-                                    <tr>
-                                        <td>${acc.phone}</td>
-                                        <td><span class="status active">活跃</span></td>
-                                        <td class="time">${formatTime(acc.created_at)}</td>
-                                        <td>
-                                            <button id="btn-check-${acc.phone.replace(/[^0-9]/g, '')}" class="btn btn-primary" onclick="checkCode('${acc.phone}')" style="padding: 5px 10px; font-size: 12px; margin-right: 5px;">检查验证码</button>
-                                            <button class="btn btn-danger" onclick="deleteAccount(${acc.id}, '${acc.phone}')" style="padding: 5px 10px; font-size: 12px;">删除</button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-                document.getElementById('accounts-list').innerHTML = html;
+                // 移除之前的"优化"逻辑，确保每次都根据后端数据全量渲染，避免数据不一致
+                // 全量渲染
+                let html = '';
+                for (const acc of accounts) {
+                    const cleanPhone = acc.phone.replace(/[^0-9]/g, '');
+                    
+                    // 获取该账号的历史消息 (使用 account_id)
+                    let messagesHtml = '<div class="empty-message">加载消息中...</div>';
+                    try {
+                        const msgRes = await fetch(`${API_BASE}/codes?account_id=${acc.id}&limit=20`);
+                        const messages = await msgRes.json();
+                        if (messages.length > 0) {
+                            messagesHtml = messages.map(msg => `
+                                <div class="message-item">
+                                    <div class="message-row-top">
+                                        <div class="message-code">${msg.code}</div>
+                                        <div class="message-time">${formatTime(msg.received_at)}</div>
+                                    </div>
+                                    <div class="message-content">${msg.message}</div>
+                                </div>
+                            `).join('');
+                        } else {
+                            messagesHtml = '<div class="empty-message">暂无验证码消息</div>';
+                        }
+                    } catch (e) {
+                        messagesHtml = '<div class="empty-message">消息加载失败</div>';
+                    }
+
+                    html += `
+                        <div class="account-card" id="card-${cleanPhone}">
+                            <div class="account-header">
+                                <div class="account-info">
+                                    <span class="account-phone">${acc.phone}</span>
+                                    <div class="account-meta">
+                                        ${acc.is_active 
+                                            ? '<span class="status active">活跃</span>' 
+                                            : '<span class="status error">Session失效</span>'}
+                                        <span class="meta-separator">|</span>
+                                        <span class="meta-date">添加于 ${formatTime(acc.created_at).split(' ')[0]}</span>
+                                    </div>
+                                </div>
+                                <div class="account-actions">
+                                    <button id="btn-check-${cleanPhone}" class="btn btn-primary" onclick="checkCode(${acc.id}, '${acc.phone}')">检查验证码</button>
+                                    <button class="btn btn-secondary" onclick="clearAccountCodes(${acc.id}, '${acc.phone}')">清空消息</button>
+                                    <button class="btn btn-danger" onclick="deleteAccount(${acc.id}, '${acc.phone}')">删除账号</button>
+                                </div>
+                            </div>
+                            <div class="message-box" id="msg-box-${cleanPhone}">
+                                ${messagesHtml}
+                            </div>
+                        </div>
+                    `;
+                }
+                container.innerHTML = html;
             } catch (e) {
-                document.getElementById('accounts-list').innerHTML = '<div class="empty">加载失败</div>';
+                console.error(e);
+                document.getElementById('accounts-container').innerHTML = '<div class="empty">加载失败</div>';
             }
         }
         
-        // 清空验证码
-        async function clearCodes() {
-            if (!confirm('确定要清空所有验证码记录吗？此操作不可恢复。')) return;
+        // 清空特定账号的消息
+        async function clearAccountCodes(accountId, phone) {
+            if (!confirm(`确定要清空 ${phone} 的所有验证码记录吗？`)) return;
             
             try {
-                const res = await fetch(`${API_BASE}/codes`, { method: 'DELETE' });
-                const data = await res.json();
+                const res = await fetch(`${API_BASE}/codes?account_id=${accountId}`, { method: 'DELETE' });
                 
                 if (res.ok) {
-                    showToast('验证码记录已清空', 'success');
-                    loadCodes();
+                    showToast('消息已清空', 'success');
+                    const cleanPhone = phone.replace(/[^0-9]/g, '');
+                    const box = document.getElementById(`msg-box-${cleanPhone}`);
+                    if (box) {
+                        box.innerHTML = '<div class="empty-message">暂无验证码消息</div>';
+                    }
                 } else {
-                    showToast('清空失败: ' + (data.detail || '未知错误'), 'error');
+                    showToast('清空失败', 'error');
                 }
             } catch (e) {
                 showToast('网络错误', 'error');
             }
         }
 
-        // 加载验证码列表
-        async function loadCodes() {
-            try {
-                // 仅获取最新的一条验证码
-                const res = await fetch(`${API_BASE}/codes?hours=24&limit=1`);
-                const codes = await res.json();
-                
-                if (codes.length === 0) {
-                    document.getElementById('codes-list').innerHTML = '<div class="empty">暂无验证码</div>';
-                    return;
-                }
-                
-                const html = `
-                    <div class="table-responsive">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>手机号</th>
-                                    <th>验证码</th>
-                                    <th>消息内容</th>
-                                    <th>接收时间</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${codes.map(code => `
-                                    <tr>
-                                        <td>${code.phone}</td>
-                                        <td class="code">${code.code}</td>
-                                        <td>${code.message}</td>
-                                        <td class="time">${formatTime(code.received_at)}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-                document.getElementById('codes-list').innerHTML = html;
-            } catch (e) {
-                document.getElementById('codes-list').innerHTML = '<div class="empty">加载失败</div>';
-            }
-        }
-        
         // 加载用户信息（用于头像）
         async function loadUserInfo() {
             try {
@@ -567,12 +639,10 @@
         // 初始加载
         loadUserInfo();
         loadAccounts();
-        loadCodes();
         
-        // 每30秒自动刷新
+        // 每30秒自动刷新状态 (不再刷新整个列表)
         setInterval(() => {
             loadAccounts();
-            loadCodes();
         }, 30000);
         
         // 点击模态框外部关闭
