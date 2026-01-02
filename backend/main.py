@@ -196,17 +196,19 @@ async def send_code(
 ):
     """发送 Telegram 验证码"""
     try:
-        # 检查账号是否已存在
+        # 检查账号是否已存在 (仅检查当前用户)
         existing = db.query(Account).filter(
             Account.phone == request.phone,
             Account.user_id == current_user.id
         ).first()
-        if existing:
-            raise HTTPException(status_code=400, detail="该手机号已添加")
+        if existing and existing.is_active:
+            raise HTTPException(status_code=400, detail="已存在该账号")
         
         # 发送验证码
         await receiver.send_verification_code(request.phone)
         return {"status": "ok", "message": "验证码已发送"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -218,6 +220,14 @@ async def verify_and_login(
 ):
     """验证码登录并保存账号"""
     try:
+        # 再次检查账号是否已存在 (仅检查当前用户)
+        existing = db.query(Account).filter(
+            Account.phone == request.phone,
+            Account.user_id == current_user.id
+        ).first()
+        if existing and existing.is_active:
+            raise HTTPException(status_code=400, detail="已存在该账号")
+
         # 生成唯一的 session 名: user_{user_id}_{phone}
         clean_phone = request.phone.replace('+', '').replace(' ', '')
         target_session_name = f"user_{current_user.id}_{clean_phone}"
@@ -230,26 +240,38 @@ async def verify_and_login(
             target_session_name=target_session_name
         )
         
-        # 保存到数据库
-        new_account = Account(
-            phone=request.phone,
-            session_name=session_name,
-            is_active=True,
-            user_id=current_user.id
-        )
-        db.add(new_account)
-        db.commit()
-        db.refresh(new_account)
+        if existing:
+            # 更新现有账号
+            existing.session_name = session_name
+            existing.is_active = True
+            # existing.created_at = datetime.now(timezone.utc) # 保持原创建时间
+            db.commit()
+            db.refresh(existing)
+            account_data = existing
+        else:
+            # 保存到数据库
+            new_account = Account(
+                phone=request.phone,
+                session_name=session_name,
+                is_active=True,
+                user_id=current_user.id
+            )
+            db.add(new_account)
+            db.commit()
+            db.refresh(new_account)
+            account_data = new_account
         
         return {
             "status": "ok",
             "message": "登录成功",
             "account": {
-                "id": new_account.id,
-                "phone": new_account.phone,
-                "created_at": new_account.created_at.isoformat()
+                "id": account_data.id,
+                "phone": account_data.phone,
+                "created_at": account_data.created_at.isoformat()
             }
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -303,7 +325,7 @@ async def check_account_codes(
             # Session 失效，更新数据库状态
             account.is_active = False
             db.commit()
-            raise HTTPException(status_code=401, detail="Session 已失效，请重新登录")
+            raise HTTPException(status_code=409, detail="Session 已失效，请重新登录")
             
         if count > 0:
             # 如果成功获取到验证码，确保账号状态为活跃

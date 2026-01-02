@@ -27,7 +27,7 @@ class Account(Base):
     __tablename__ = 'accounts'
     
     id = Column(Integer, primary_key=True, index=True)
-    phone = Column(String, unique=True, index=True)
+    phone = Column(String, index=True) # Removed unique=True
     session_name = Column(String, unique=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utcnow)

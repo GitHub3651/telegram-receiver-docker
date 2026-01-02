@@ -201,6 +201,40 @@
     </div>
     
     <script>
+        // 重新登录
+        function relogin(phone) {
+            openAddAccountModal();
+            // 自动填充手机号
+            const parts = phone.split(' ');
+            if (parts.length > 1) {
+                // 尝试匹配国家代码
+                const countryCode = parts[0];
+                const number = parts.slice(1).join(''); // 剩下的部分
+                
+                const select = document.getElementById('country-select');
+                let found = false;
+                for (let i = 0; i < select.options.length; i++) {
+                    if (select.options[i].value === countryCode) {
+                        select.selectedIndex = i;
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (found) {
+                    document.getElementById('phone-input').value = number;
+                } else {
+                    // 如果没找到匹配的国家代码，就全部填入输入框（可能需要手动调整）
+                    document.getElementById('country-select').value = ''; // 选择"其他"或者空
+                    document.getElementById('phone-input').value = phone;
+                }
+            } else {
+                document.getElementById('phone-input').value = phone;
+            }
+            
+            showAlert('请点击发送验证码以重新登录', 'info');
+        }
+
         // 检查登录状态
         const token = localStorage.getItem('token');
         if (!token) {
@@ -333,9 +367,14 @@
                     document.getElementById('step1').style.display = 'none';
                     document.getElementById('step2').style.display = 'block';
                 } else {
-                    const errorMsg = typeof data.detail === 'string' ? data.detail : 
-                                    (data.detail?.message || data.message || '发送失败');
-                    showAlert(errorMsg, 'error');
+                    console.error('Send code error:', data);
+                    let errorMsg = '发送失败';
+                    if (data && data.detail) {
+                        errorMsg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+                    } else if (data && data.message) {
+                        errorMsg = data.message;
+                    }
+                    showAlert(errorMsg || '未知错误', 'error');
                 }
             } catch (e) {
                 showAlert('网络错误: ' + (e.message || '未知错误'), 'error');
@@ -379,9 +418,14 @@
                         loadAccounts();
                     }, 1500);
                 } else {
-                    const errorMsg = typeof data.detail === 'string' ? data.detail : 
-                                    (data.detail?.message || data.message || '登录失败');
-                    showAlert(errorMsg, 'error');
+                    console.error('Verify error:', data);
+                    let errorMsg = '登录失败';
+                    if (data && data.detail) {
+                        errorMsg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+                    } else if (data && data.message) {
+                        errorMsg = data.message;
+                    }
+                    showAlert(errorMsg || '未知错误', 'error');
                 }
             } catch (e) {
                 showAlert('网络错误: ' + (e.message || '未知错误'), 'error');
@@ -467,7 +511,13 @@
                         btn.classList.add('btn-primary');
                     }, 2000);
                 } else {
-                    showToast('检查失败: ' + (data.detail || '未知错误'), 'error');
+                    if (res.status === 409) {
+                        showToast('Session 已失效，请重新登录', 'error');
+                        loadAccounts(); // 刷新列表以显示重新登录按钮
+                    } else {
+                        showToast('检查失败: ' + (data.detail || '未知错误'), 'error');
+                    }
+                    
                     btn.innerText = originalText;
                     btn.disabled = false;
                     if (res.status === 401) {
@@ -582,7 +632,10 @@
                                     </div>
                                 </div>
                                 <div class="account-actions">
-                                    <button id="btn-check-${cleanPhone}" class="btn btn-primary" onclick="checkCode(${acc.id}, '${acc.phone}')">检查验证码</button>
+                                    ${acc.is_active 
+                                        ? `<button id="btn-check-${cleanPhone}" class="btn btn-primary" onclick="checkCode(${acc.id}, '${acc.phone}')">检查验证码</button>`
+                                        : `<button id="btn-relogin-${cleanPhone}" class="btn btn-danger" onclick="relogin('${acc.phone}')">重新登录</button>`
+                                    }
                                     <button class="btn btn-secondary" onclick="clearAccountCodes(${acc.id}, '${acc.phone}')">清空消息</button>
                                     <button class="btn btn-danger" onclick="deleteAccount(${acc.id}, '${acc.phone}')">删除账号</button>
                                 </div>
