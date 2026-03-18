@@ -21,14 +21,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    # 针对 1GB RAM 优化
+    # 针对 8GB RAM 优化
     command: >
       postgres
-      -c shared_buffers=64MB
-      -c effective_cache_size=256MB
-      -c maintenance_work_mem=16MB
-      -c work_mem=4MB
-      -c max_connections=20
+      -c shared_buffers=1GB
+      -c effective_cache_size=4GB
+      -c maintenance_work_mem=256MB
+      -c work_mem=32MB
+      -c max_connections=200
 
   # FastAPI 后端应用
   backend:
@@ -57,15 +57,15 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    # 资源限制
+    # 资源限制放宽
     deploy:
       resources:
         limits:
-          cpus: '1.5'
-          memory: 400M
+          cpus: '2.0'
+          memory: 2G
         reservations:
           cpus: '0.5'
-          memory: 200M
+          memory: 512M
 
   # 数据库管理工具 (Adminer)
   adminer:
